@@ -1,27 +1,39 @@
-export const get_data = async (filePath) => {
+export const get_data = async (url) => {
   try {
-    const response = await fetch(filePath);
+    const response = await fetch(url);
     const data_txt = await response.text();
-    
-    const rows = data_txt.split('\n').map(row => row.trim());
-    const headers = rows[0].split(',');
-    const data = rows.slice(1).map(row => {
-      const values = row.split(',');
-      return headers.reduce((acc, header, index) => {
+    const lines = data_txt.split('\n');
+    const headers = lines[0].replace(/\r/g, '').split(',');
+    headers.push('date');
+    headers.push('time');
+
+    const data = lines.slice(1).map(line => {
+      const values = line.split(',');
+      const [date, time] = values[0].split(' ');
+      values.push(date, time);
+      
+      const obj = headers.reduce((acc, header, index) => {
         acc[header] = values[index];
         return acc;
       }, {});
-    });
 
-    return data; // Devuelve el array de objetos
+      delete obj.datetime;
+      delete obj.op1;
+      delete obj.op2;
+      delete obj.category;
+
+      return obj;
+    })
+
+    return data;
   } catch (error) {
     console.error('Error al leer el archivo CSV:', error);
     return [];
   }
 };
 
-export const get_column = (data, columnName) => {
-  return data.map(row => row[columnName]);
+export const get_column = (data, col) => {
+  return data.map(row => row[col]);
 };
 
 export const get_keys = (data) => {

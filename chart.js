@@ -1,147 +1,127 @@
 import { get_data } from './data.js';
 
-const call_charts = async () => {
-  const datasets = {
-    sj: await get_data('./dataset_sj.csv'),
-    mp: await get_data('./dataset_mp.csv'),
-    sf: await get_data('./dataset_sf.csv')
-  }
-
-  const ds_by_time = {  
-    sj: {
-      data: group_by_time(datasets.sj, times),
-    },
-    mp: {
-      data: group_by_time(datasets.mp, times),
-    },
-    sf: {
-      data: group_by_time(datasets.sf, times),
-    }
-  }
-  
-  const mainset = mainset_by_time(ds_by_time);
-
-  render_main_chart(main_chart, times, mainset.total, mainset.amount);
-  render_main_chart(select_chart, times, get_totals(ds_by_time.sj.data, 1), get_totals(ds_by_time.sj.data, 0));
-  enable_event_handler(ds_by_time);
+const links = {
+  times: [
+    "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", 
+    "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", 
+    "19:00", "20:00", "21:00", "22:00", "23:00", '24:00',
+  ],
+  datasets: [],
+  data_chart: [],
 }
 
-const mainset_by_time = (dataset) => {
-  const main_prices = Array(times.length).fill(0);
-  const main_prods = Array(times.length).fill(0);
+const chart_colors = [
+  'rgb(118, 215, 196)',
+  'rgb(218, 247, 166)',
+  'rgb(255, 195, 0)',
+  'rgb(255, 87, 51)',
+  'rgb(199, 0, 57)',
+  'rgb(144, 12, 63)',
+];
 
-  Object.values(dataset).forEach(ds => { 
-    const temp_prices = get_totals(ds.data, 1);
-    const temp_prods = get_totals(ds.data, 0);
-
-    temp_prices.forEach((price, index) => {
-      main_prices[index] += price;
-    });
-
-    temp_prods.forEach((prod, index) => {
-      main_prods[index] += prod;
-    });
-  });
-
-  return { total: main_prices, amount: main_prods };
-};
+const chart_bg_colors = [
+  'rgba(118, 215, 196, .2)',
+  'rgba(218, 247, 166, .2)',
+  'rgba(255, 195, 0, .2)',
+  'rgba(255, 87, 51, .2)',
+  'rgba(199, 0, 57, .2)',
+  'rgba(144, 12, 63, .2)',
+];
 
 const group_by_time = (data, times) => {
-  const grouped = times.reduce((acc, time) => {
-    acc[time] = [];
+  const group = times.reduce((acc, time, index) => {
+    if (index + 1 < times.length) {
+      const row = [];
+      
+      Object.values(data).forEach(obj => {
+        if (obj.time > time && obj.time <= times[index + 1]) {
+          row.push(obj);
+        }
+      });
+
+      acc[time] = row;
+    }
+
     return acc;
   }, {});
 
-  data.forEach(item => {
-    const sale_time = item.time.split(':')[0] + ':00:00';
-    if (grouped[sale_time]) {
-      grouped[sale_time].push(item);
-    }
-  });
-
-  return grouped;
+  return group;
 };
 
-const get_totals = (data, arg) => {
-  const array = [];
-  times.forEach(time => {
-    let temp = 0;
-    data[time].forEach(element => {
-      if (arg == 0) temp += parseFloat(element.amount);
-      if (arg == 1) temp += parseFloat(element.total);
+const calculator = (array) => {
+  return array.reduce(
+      ([acc_p, acc_q], obj) => [
+          acc_p + parseFloat(obj.quantify * obj.cost),
+          acc_q + parseFloat(obj.quantify)
+      ],
+      [0, 0]
+  );
+};
+
+const init_chart = async () => {
+  links.datasets = [
+    { san_juan: await get_data('./dataset_san_juan.csv') },
+  ]
+
+  get_data('./dataset_san_juan.csv').then(dataset => {
+    const grouped_data = group_by_time(dataset, links.times);
+    const prices_data = [];
+    const quantify_data = [];
+
+    Object.values(grouped_data).forEach((array) => {
+      const [p, q] = calculator(array);
+      prices_data.push(p);
+      quantify_data.push(q);
     });
-    array.push(parseInt(temp));
-  })
 
-  return array;
-};
-
-const colors = [
-  'rgb(128, 222, 234)',
-  'rgb(179, 229, 252)',
-  'rgb(129, 212, 250)',
-  'rgb(121, 134, 203)',
-  'rgb(149, 117, 205)',
-  'rgb(240, 98, 146)',
-];
-
-const bg_colors = [
-  'rgba(128, 222, 234, .2)',
-  'rgba(179, 229, 252, .2)',
-  'rgba(129, 212, 250, .2)',
-  'rgba(121, 134, 203, .2)',
-  'rgba(149, 117, 205, .2)',
-  'rgba(240, 98, 146, .2)',
-];
-
-const times = [
-  '08:00:00', '09:00:00', '10:00:00', '11:00:00', '12:00:00', '13:00:00',
-  '14:00:00', '15:00:00', '16:00:00', '17:00:00', '18:00:00', '19:00:00',
-  '20:00:00', '21:00:00', '22:00:00',
-];
-
-const render_main_chart = (chart, times, prices, prods) => {
-  const data = {
-    labels: times,
-    datasets: [
-      {
-        label: 'Ventas',
-        data: prices,
-        backgroundColor: bg_colors[4],
-        borderColor: colors[4],
-        tension: .4,
-        yAxisID: 'y',
-      },
-      {
-        label: 'Productos',
-        data: prods,
-        backgroundColor: bg_colors[0],
-        borderColor: colors[0],
-        tension: .4,
-        yAxisID: 'y1',
-      },
-    ]
-  }
-
-  const options = {
-    responsive: true,
-    scales: {
-      y: {
-        
-        display: true,
-        position: 'left',
-      },
-      y1: {
-        display: true,
-        position: 'right',
-        ticks: {
-          beginAtZero: true,
+    const data = {
+      labels: links.times,
+      datasets: [
+        {
+          label: 'Subtotal',
+          data: prices_data,
+          backgroundColor: chart_bg_colors[4],
+          borderColor: chart_colors[4],
+          borderWidth: 1,
+          fill: true,
+          tension: 0.3,
         },
-      },
-    }
-  };
+        {
+          label: 'Items',
+          data: quantify_data,
+          backgroundColor: chart_bg_colors[0],
+          borderColor: chart_colors[0],
+          borderWidth: 1,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y1',
+        },
+      ]
+    };
 
-  new Chart(chart, { type: 'line', data, options }, )
+    const options = {
+      stacked: false,
+      scales: {
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+        }
+      }
+    };
+
+    new Chart('main_chart',  {
+      type: 'line',
+      data: data,
+      options: options,
+    });
+});
+
 }
 
-call_charts();
+init_chart();
