@@ -1,4 +1,5 @@
 import { get_data } from './data.js';
+import { enable_event_handler } from './handler.js';
 
 const links = {
   times: [
@@ -7,7 +8,10 @@ const links = {
     "19:00", "20:00", "21:00", "22:00", "23:00", '24:00',
   ],
   datasets: [],
+  quantify_data: new Map,
+  cost_data: new Map,
   data_chart: [],
+  showing: '',
 }
 
 const chart_colors = [
@@ -58,70 +62,90 @@ const calculator = (array) => {
   );
 };
 
+const update_chart_data = (key, datasets) => {
+  const chart = Chart.getChart(key);
+
+  datasets.forEach((dataset, index) => { chart.data.datasets[index].data = dataset });
+
+  chart.update();
+}
+
+const init_datasets = async () => {
+  links.datasets.forEach((dataset, index) => {
+    Object.entries(dataset).forEach(([key, data]) => {
+      const grouped_data = group_by_time(data, links.times);
+      const cost_data = [];
+      const quantify_data = [];
+
+      Object.values(grouped_data).forEach((array) => {
+        const [p, q] = calculator(array);
+        cost_data.push(p);
+        quantify_data.push(q);
+      });
+
+      links.quantify_data[key] = quantify_data ;
+      links.cost_data[key] = cost_data;
+    });
+  })
+}
+
+const load_chart = async (cost_data, quantify_data, times) => {
+  const data = {
+    labels: times,
+    datasets: [
+      {
+        label: 'Subtotal',
+        data: cost_data,
+        backgroundColor: chart_bg_colors[4],
+        borderColor: chart_colors[4],
+        borderWidth: 1,
+        fill: true,
+        tension: 0.3,
+      },
+      {
+        label: 'Items',
+        data: quantify_data,
+        backgroundColor: chart_bg_colors[0],
+        borderColor: chart_colors[0],
+        borderWidth: 1,
+        fill: true,
+        tension: 0.3,
+        yAxisID: 'y1',
+      },
+    ]
+  };
+
+  const options = {
+    stacked: false,
+    scales: {
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+      }
+    }
+  };
+
+  new Chart('main_chart',  {
+    type: 'line',
+    data: data,
+    options: options,
+  });
+}
+
 const init_chart = async () => {
   links.datasets = [
     { san_juan: await get_data('./dataset_san_juan.csv') },
   ]
 
-  get_data('./dataset_san_juan.csv').then(dataset => {
-    const grouped_data = group_by_time(dataset, links.times);
-    const prices_data = [];
-    const quantify_data = [];
+  await init_datasets();
 
-    Object.values(grouped_data).forEach((array) => {
-      const [p, q] = calculator(array);
-      prices_data.push(p);
-      quantify_data.push(q);
-    });
-
-    const data = {
-      labels: links.times,
-      datasets: [
-        {
-          label: 'Subtotal',
-          data: prices_data,
-          backgroundColor: chart_bg_colors[4],
-          borderColor: chart_colors[4],
-          borderWidth: 1,
-          fill: true,
-          tension: 0.3,
-        },
-        {
-          label: 'Items',
-          data: quantify_data,
-          backgroundColor: chart_bg_colors[0],
-          borderColor: chart_colors[0],
-          borderWidth: 1,
-          fill: true,
-          tension: 0.3,
-          yAxisID: 'y1',
-        },
-      ]
-    };
-
-    const options = {
-      stacked: false,
-      scales: {
-        y: {
-          type: 'linear',
-          display: true,
-          position: 'left',
-        },
-        y1: {
-          type: 'linear',
-          display: true,
-          position: 'right',
-        }
-      }
-    };
-
-    new Chart('main_chart',  {
-      type: 'line',
-      data: data,
-      options: options,
-    });
-});
-
+  await load_chart(links.cost_data['san_juan'], links.quantify_data['san_juan'], links.times);
 }
 
 init_chart();
